@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from urllib.parse import quote, urljoin, urlsplit
+from urllib.parse import parse_qs, quote, urlencode, urljoin, urlsplit, urlunsplit
 
 from .http import SourceError, Unavailable
 from .util import doi_normalize, plain
@@ -109,7 +109,12 @@ def _cif_links(value):
 
 
 def parse_hybrid3(item):
-    system = item.get("system") or {}
+    system = dict(item.get("system") or {})
+    # DatasetSerializer embeds the raw Django choice, unlike SystemSerializer.
+    # Upstream mapping: 0→0D, 1→1D, 2→2D, 3→2.5D, 4→3D.
+    raw_dimension = system.get("dimensionality")
+    system["dimensionality_source_code"] = raw_dimension
+    system["dimensionality"] = {0: 0, 1: 1, 2: 2, 3: 2.5, 4: 3}.get(raw_dimension)
     reference = item.get("reference") or {}
     prop = item.get("primary_property") or {}
     structure = {"id": f"HybriD3:{system.get('id', item['pk'])}", "source": "hybrid3",
@@ -127,6 +132,8 @@ def parse_hybrid3(item):
                   url=f"https://materials.hybrid3.duke.edu/materials/dataset/{item['pk']}",
                   structures=structures, metadata={
                       "system": system, "property": prop, "unit": item.get("primary_unit"),
+                      "secondary_property": item.get("secondary_property"), "secondary_unit": item.get("secondary_unit"),
+                      "sample_type": item.get("sample_type"), "extraction_method": item.get("extraction_method"),
                       "subsets": item.get("subsets", []), "is_experimental": item.get("is_experimental"),
                       "verified_by": item.get("verified_by", []), "synthesis": item.get("synthesis", []),
                       "experimental": item.get("experimental", []), "computational": item.get("computational", []),
@@ -191,7 +198,20 @@ def fetch_page(source, query, cursor, seen, http, config):
         url = cursor or "https://materials.hybrid3.duke.edu/materials/datasets/"
         if urlsplit(url).netloc != "materials.hybrid3.duke.edu":
             raise SourceError("HybriD³ retornou paginação para domínio inesperado.")
-        data = http.json(url, None if cursor else {"page_size": config["page_size"]})
+        # Large spectral datasets make 50-row pages time out on the live service.
+        # Reduce size while preserving the exact offset of an existing checkpoint.
+        params = None if cursor else {"page_size": min(25, config["page_size"])}
+        if cursor:
+            parts = urlsplit(url)
+            query_params = parse_qs(parts.query)
+            old_size = int(query_params.get("page_size", [config["page_size"]])[0])
+            old_page = int(query_params.get("page", ["1"])[0])
+            if old_size > 25:
+                new_size = max(n for n in range(1, 26) if old_size % n == 0)
+                query_params["page_size"] = [str(new_size)]
+                query_params["page"] = [str((old_page - 1) * old_size // new_size + 1)]
+                url = urlunsplit(parts._replace(query=urlencode(query_params, doseq=True)))
+        data = http.json(url, params)
         items, total, next_cursor = data["results"], data["count"], data["next"]
         parser, natural_end = parse_hybrid3, not next_cursor
         if len(items) > limit - seen:

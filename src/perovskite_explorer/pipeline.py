@@ -90,7 +90,19 @@ def collected_records(store, compound_id=None):
     cifs = {r["id"]: r for j in store.jobs("cif") for r in j["payload"]}
     texts = {r["id"]: r for j in store.jobs("fulltext") for r in j["payload"]}
     for item in unique.values():
+        if item.get("source") == "hybrid3":
+            # Normalize snapshots written before the raw-choice mapping was added.
+            system = dict(item.get("metadata", {}).get("system", {}))
+            if "dimensionality_source_code" not in system:
+                raw = system.get("dimensionality")
+                system.update({"dimensionality_source_code": raw,
+                               "dimensionality": {0: 0, 1: 1, 2: 2, 3: 2.5, 4: 3}.get(raw)})
+                item["metadata"] = item["metadata"] | {"system": system}
+                item["structures"] = [s | {"dimensionality": system["dimensionality"]} for s in item.get("structures", [])]
         item["structures"] = [s | cifs.get(s["id"], {}) for s in item.get("structures", [])]
+        if item.get("source") == "hybrid3":
+            item["structures"] = [s | {"dimensionality": item["metadata"]["system"].get("dimensionality")}
+                                  for s in item.get("structures", [])]
         pmcid = item.get("metadata", {}).get("pmcid")
         if pmcid in texts:
             item["fulltext"] = texts[pmcid]["text"]
@@ -134,7 +146,7 @@ def plan_searches(store, compounds, config):
                 store.add_job(compound["id"], source, query)
 
 
-def run(directory: Path, offline=False, log=print):
+def run(directory: Path, offline=False, log=print, timeout=None):
     directory = directory.resolve()
     with FileLock(str(directory / ".run.lock"), timeout=0):
         store = Store(directory)
@@ -143,6 +155,7 @@ def run(directory: Path, offline=False, log=print):
             raise KeyboardInterrupt
         signal.signal(signal.SIGTERM, stop)
         interrupted = False
+        incomplete = False
         try:
             manifest = store.get_meta("manifest")
             if not manifest:
@@ -153,7 +166,11 @@ def run(directory: Path, offline=False, log=print):
                 raise ValueError("Integridade SQLite falhou. Use restore em uma pasta nova.")
             store.recover()
             config = manifest["config"]
-            http = HttpClient(store, offline=offline, timeout=config["timeout"], retries=config["retries"],
+            if timeout is not None:
+                if timeout < 1:
+                    raise ValueError("Timeout deve ser positivo.")
+                store.event("network_timeout_override", timeout)
+            http = HttpClient(store, offline=offline, timeout=timeout or config["timeout"], retries=config["retries"],
                               interval=config["interval"], email=os.getenv("PEROVSKITE_EMAIL", ""))
             compounds = {c["id"]: c for c in manifest["compounds"]}
             completed = 0
@@ -198,10 +215,23 @@ def run(directory: Path, offline=False, log=print):
             plan_searches(store, resolved, config)
             execute({"search"})
             if config["fulltext"]:
-                pmcids = sorted({r["metadata"]["pmcid"] for r in collected_records(store)
-                                 if r.get("metadata", {}).get("pmcid") and r["metadata"].get("is_open_access")})
+                ranks = {}
+                for rec in collected_records(store):
+                    if not rec.get("metadata", {}).get("pmcid") or not rec["metadata"].get("is_open_access"):
+                        continue
+                    evs = [evidence(rec, c) for c in resolved]
+                    rank = 0 if any(e["status"] in {"structural_candidate", "mixed_evidence"} for e in evs) else (
+                        1 if any(e["matched_aliases"] and e["scope_match"] for e in evs) else 2)
+                    pmcid = rec["metadata"]["pmcid"]
+                    ranks[pmcid] = min(rank, ranks.get(pmcid, 2))
+                pmcids = sorted(ranks, key=lambda p: (ranks[p], p))
                 store.set_meta("fulltext_coverage", {"eligible": len(pmcids), "planned": min(len(pmcids), config["max_fulltexts"])})
-                for pmcid in pmcids[:config["max_fulltexts"]]:
+                selection = store.get_meta("fulltext_selection")
+                if selection is None:
+                    existing = [j["query"] for j in store.jobs("fulltext")]
+                    selection = existing or pmcids[:config["max_fulltexts"]]
+                    store.set_meta("fulltext_selection", selection)
+                for pmcid in selection:
                     store.add_job("__all__", "europepmc", pmcid, "fulltext")
                 execute({"fulltext"})
             if config["follow_dois"] and "cod" in config["sources"]:
@@ -234,5 +264,8 @@ def run(directory: Path, offline=False, log=print):
                 from .report import export_report
                 export_report(store)
                 store.backup()
+                incomplete = any(j["status"] != "done" for j in store.jobs())
             store.close()
-        return 130 if interrupted else 0
+        if incomplete and not interrupted:
+            log("Busca parcial: há consultas pendentes/falhas. Consulte queries.csv e use resume.", flush=True)
+        return 130 if interrupted else (2 if incomplete else 0)

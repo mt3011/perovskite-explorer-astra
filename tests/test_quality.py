@@ -32,6 +32,7 @@ def test_cif_presence_does_not_confirm_role(compound, cif):
     rec = record("local", "x", kind="structure", metadata={"chemical_name": "Phenazinium lead iodide", "formula": "C12 H10 N2 Pb I4"})
     assert evidence(rec, compound)["status"] == "structural_candidate"
     rec["metadata"]["formula"] = "C12 H8 N2"
+    rec["metadata"]["chemical_name"] = "Phenazine"
     assert evidence(rec, compound)["status"] == "outside_scope"
 
 

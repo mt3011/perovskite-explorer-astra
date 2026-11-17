@@ -35,6 +35,7 @@ def parser():
     resume = sub.add_parser("resume", help="Retomar consultas pendentes/falhas preservando o cache")
     resume.add_argument("directory", type=Path)
     resume.add_argument("--offline", action="store_true")
+    resume.add_argument("--timeout", type=int, help="Timeout HTTP em segundos; alteração registrada no histórico")
     for cmd, description in [("status", "Ver estado, pendências e integridade"),
                              ("export", "Recriar HTML/CSV/JSON sem consultar a rede"),
                              ("backup", "Criar cópia consistente de toda a execução")]:
@@ -156,7 +157,7 @@ def main(argv=None):
                 return 0
         ensure_run(args.directory)
         if args.command == "resume":
-            code = run(args.directory, args.offline)
+            code = run(args.directory, args.offline, timeout=args.timeout)
             print(f"Relatório: {(args.directory / 'report.html').resolve()}")
             return code
         with FileLock(str(args.directory / ".run.lock"), timeout=0):

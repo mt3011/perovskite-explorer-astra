@@ -22,10 +22,10 @@ Entregar código no repositório mt3011/perovskite-explorer-astra e guia em port
 ## Etapas
 
 - [x] Localizar repositório e consultar documentação oficial das fontes.
-- [ ] Implementar núcleo, persistência, fontes e análise determinística.
-- [ ] Implementar CLI, relatórios e importação/revisão local.
-- [ ] Testar falhas, retomada, qualidade das classificações e contratos das fontes.
-- [ ] Executar exemplo real e documentar disponibilidade e limitações.
+- [x] Implementar núcleo, persistência, fontes e análise determinística.
+- [x] Implementar CLI, relatórios e importação/revisão local.
+- [x] Testar falhas, retomada, qualidade das classificações e contratos das fontes.
+- [x] Executar exemplo real e documentar disponibilidade e limitações.
 - [ ] Salvar commits e enviar ao GitHub.
 
 ## Retomada do desenvolvimento
@@ -34,3 +34,14 @@ Entregar código no repositório mt3011/perovskite-explorer-astra e guia em port
 2. Executar `.venv/bin/python -m pytest` quando os testes estiverem disponíveis.
 3. Preservar `runs/`, respostas e bancos de dados existentes.
 4. Não colocar chaves, bases licenciadas ou texto integral de editoras no Git.
+
+## Estado da entrega
+
+- Código inicial já enviado ao GitHub; concluir commit final de documentação/testes.
+- 48 testes passaram; lint e build também. Relatório testado em Chromium desktop/mobile.
+- `docs/GUIA_RAPIDO.pdf` tem duas páginas; fonte em `docs/LEIA_PRIMEIRO.md`.
+- Piloto real: `runs/example-live`, 47 CIFs, 220/221 tarefas concluídas.
+- A pendência é um timeout externo no HybriD³ após 425 datasets. Não apagar nem
+  marcar como concluída. Pode retomar com `resume runs/example-live --timeout 90`.
+- Revisão científica não executada; contagens de candidatos não são confirmações.
+- Conector CSD preparado conforme SDK oficial, sem validação licenciada.

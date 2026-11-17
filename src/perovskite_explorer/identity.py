@@ -10,7 +10,7 @@ from .util import digest, normalize
 # Deliberately small, transparent dictionary. Different protonation states are search
 # variants, not statements of chemical identity or of structural incorporation.
 KNOWN = {
-    "phenazine": {"aliases": ["phenazine"], "family_aliases": ["phenazinium", "phenazine-5,10-diium"]},
+    "phenazine": {"aliases": [], "family_aliases": ["phenazinium", "phenazine-5,10-diium"]},
     "niacinamide": {"aliases": ["nicotinamide", "pyridine-3-carboxamide"],
                     "family_aliases": ["nicotinamidium"]},
     "nicotinamide": {"aliases": ["niacinamide", "pyridine-3-carboxamide"],
@@ -42,8 +42,8 @@ def read_compounds(path: Path, overrides=None):
         seen.add(key)
         custom = overrides.get(name, {})
         info = KNOWN.get(key, {}) | custom
-        aliases = list(dict.fromkeys([name, *info.get("aliases", [])]))
-        family = list(dict.fromkeys(info.get("family_aliases", [])))
+        aliases = list({normalize(a): a for a in reversed([name, *info.get("aliases", [])])}.values())[::-1]
+        family = list({normalize(a): a for a in info.get("family_aliases", [])}.values())
         if any(not isinstance(a, str) or len(a) < 3 or len(a) > 200 or '"' in a for a in aliases + family):
             raise ValueError(f"Alias inválido para {name}.")
         results.append({"id": digest(key)[:16], "name": name, "aliases": aliases,

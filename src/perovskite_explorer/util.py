@@ -39,7 +39,7 @@ def mentions(text: str, aliases: list[str]) -> list[str]:
 
 
 def doi_normalize(value: str | None) -> str:
-    value = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", value or "", flags=re.I)
+    value = re.sub(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", "", (value or "").strip(), flags=re.I)
     return value.strip().lower().rstrip(".,;") if re.match(r"10\.\d{4,9}/\S+", value.strip()) else ""
 
 

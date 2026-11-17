@@ -87,7 +87,12 @@ def obtain_structure(structure, directory, http):
         atomic_write(path, body)
     else:
         return structure | {"availability": "metadata_only", "note": "Fonte sem URL CIF; consulte o depósito/artigo."}
-    info = inspect_cif(path)
+    try:
+        info = inspect_cif(path)
+    except SourceError:
+        if structure.get("url"):
+            http.invalidate(structure["url"])
+        raise
     preview = path.with_suffix(".svg")
     atoms = next((b.get("preview_atoms", []) for b in info["blocks"] if b.get("has_coordinates")), [])
     if atoms:

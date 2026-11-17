@@ -105,4 +105,13 @@ class HttpClient:
         try:
             return json.loads(body)
         except (ValueError, UnicodeDecodeError):
+            self.invalidate(url, params)
             raise SourceError(f"Resposta não é JSON válido em {urlsplit(url).netloc}.") from None
+
+    def invalidate(self, url, params=None):
+        public = {k: v for k, v in (params or {}).items()
+                  if k.lower() not in {"api_key", "token", "key", "access_token"}}
+        key = digest(canonical({"url": url, "params": public}))
+        with self.store.db:
+            self.store.db.execute("DELETE FROM http_cache WHERE key=?", (key,))
+        self.store.event("invalid_response_discarded", key)

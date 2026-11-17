@@ -51,6 +51,7 @@ def evidence(record, compound):
     hybrid = "C" in el and bool(el & METALS)
     scope = bool(SCOPE_RE.search(text + " " + names + " " + local_text)) or hybrid
     supporting, nonstructural, uncertain, properties = [], [], [], []
+    semiconductor_context = False
     dimensions = set()
     for location, sentence in segments:
         if not mentions(sentence, aliases):
@@ -58,6 +59,8 @@ def evidence(record, compound):
         if PROPERTY_RE.search(sentence):
             properties.append({"text": sentence[:1000], "location": location,
                                "attribution": "Contexto com nome; valor/atribuição à fase requer revisão."})
+        if re.search(r"semiconduct|band.?gap|photoluminescen|photoconduct", sentence, re.I):
+            semiconductor_context = True
         if NONSTRUCTURAL_RE.search(sentence):
             nonstructural.append({"text": sentence[:800], "location": location})
         if STRUCTURAL_RE.search(sentence) and scope:
@@ -71,6 +74,9 @@ def evidence(record, compound):
     warnings = []
     if not matched:
         status = "no_exact_mention"
+    elif record.get("kind") == "structure" and formula and not hybrid:
+        status = "outside_scope"
+        warnings.append("Composição do depósito não indica híbrido com carbono e metal/metaloide selecionado.")
     elif not scope:
         status = "outside_scope"
     elif record.get("type") == "review" or "review" in normalize(record.get("title", "")):
@@ -98,13 +104,17 @@ def evidence(record, compound):
         warnings.append("Sem resumo/texto integral disponível; análise limitada ao título e metadados.")
     if name_hits and hybrid and not bool(el & HALIDES):
         warnings.append("Candidato híbrido sem halogênio identificado; pode ser complexo/MOF fora do interesse.")
-    if system.get("dimensionality") in (0, 1, 2, 3):
+    if system.get("dimensionality") in (0, 1, 2, 2.5, 3):
         dimensions.add(str(system["dimensionality"]))
     return {"status": status, "matched_aliases": matched,
             "family_matches": [x for x in matched if x in compound["family_aliases"]],
             "supporting": supporting, "nonstructural": nonstructural, "uncertain": uncertain,
             "properties_context": properties, "reported_dimensions": sorted(dimensions),
-            "warnings": warnings, "scope_match": scope}
+            "warnings": warnings, "scope_match": scope,
+            "interest": {"metal_halide_composition": hybrid and bool(el & HALIDES),
+                         "semiconductor_context": semiconductor_context,
+                         "hybrid3_curated_dataset": record.get("source") == "hybrid3",
+                         "note": "Indicadores para organizar leitura; não comprovam semicondutividade."}}
 
 
 def work_key(record):

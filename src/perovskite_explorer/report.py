@@ -88,6 +88,10 @@ def build_report(store):
                       if s.get("cif", {}).get("valid_structure")}
         counts = {"works_with_exact_mention": len(works), "screened_without_exact_mention": screened_without_mention,
                   "candidate_structural_dois": len(candidate_dois), "confirmed_structural_dois": len(confirmed_dois),
+                  "candidate_dois_with_metal_halide_composition": len({w["doi"] for w in candidates if w["doi"] and
+                      w["publication_eligible"] and any(e["interest"]["metal_halide_composition"] for e in w["evidence"])}),
+                  "candidate_dois_with_semiconductor_context": len({w["doi"] for w in candidates if w["doi"] and
+                      w["publication_eligible"] and any(e["interest"]["semiconductor_context"] for e in w["evidence"])}),
                   "structural_records_without_doi": sum(not w["doi"] for w in confirmed + candidates),
                   "structure_entries": len(structure_ids), "distinct_cif_files": len(valid_cifs),
                   "reviewed_samples": len(samples), "reviewed_replications": sum(s["reviewed_replications"] for s in sample_rows),
@@ -142,9 +146,24 @@ def render_html(report):
                 properties = "".join(f'<blockquote>{esc(s["text"])}<small>Propriedade — atribuição à fase requer conferência</small></blockquote>'
                                      for s in ev["properties_context"][:5])
                 cites = f' · citações nesta fonte: {rec["citations"]}' if rec.get("citations") is not None else ""
+                interest = []
+                if ev["interest"]["metal_halide_composition"]:
+                    interest.append("Composição híbrida com metal + halogênio")
+                if ev["interest"]["semiconductor_context"]:
+                    interest.append("Propriedade/contexto semicondutor junto ao nome")
+                if ev["interest"]["hybrid3_curated_dataset"]:
+                    interest.append("Dataset HybriD³")
+                interest_label = "; ".join(interest) or "Sem indicador específico de semicondutor nesta evidência"
                 evidence_parts.append(f'<div class="evidence"><b>{esc(rec["source"])}</b>{esc(cites)} · {link(rec["url"], "registro")}'
+                                      f'<p class="muted">{esc(interest_label)} — conferir propriedades da fase.</p>'
                                       f'<p>{esc(", ".join(ev["matched_aliases"]) or "Nome não localizado")}</p>{excerpts}{properties}'
                                       f'<p class="muted">{esc(" ".join(ev["warnings"]))}</p></div>')
+                if rec["source"] == "hybrid3":
+                    meta = rec["metadata"]
+                    prop = meta.get("property", {}).get("name", "não identificada")
+                    dataset_type = "experimental" if meta.get("is_experimental") else "computacional"
+                    evidence_parts.append(f'<details><summary>HybriD³: {esc(prop)} · {dataset_type} · valores, unidades e condições</summary>'
+                                          f'<pre>{esc(json.dumps(meta, ensure_ascii=False, indent=2))}</pre></details>')
                 for structure in rec["structures"]:
                     if structure["id"] in seen_structures:
                         continue
@@ -198,7 +217,7 @@ summary{{cursor:pointer;line-height:1.6}}.badge{{display:inline-block;font-size:
 <section class="coverage"><details><summary>Cobertura e consultas incompletas ({len(failed_jobs)})</summary><p>Totais das fontes são resultados brutos, inclusive busca aproximada no Crossref; não são frequência de uso estrutural. Veja todas as consultas em queries.csv.</p><div class="table-wrap"><table><tr><th>Fonte</th><th>Consulta</th><th>Estado</th><th>Obtidos</th><th>Total bruto</th><th>Lacuna</th></tr>{job_rows}</table></div></details><p>Fontes selecionadas: {esc(', '.join(report['manifest']['config']['sources']))}. CSD exige instalação/licença e seleção explícita.</p></section>
 <div class="filters"><input id="search" aria-label="Filtrar resultados" placeholder="Filtrar por composto, título, DOI…"><select id="status" aria-label="Filtrar classificação"><option value="">Todas as classificações</option>{options}</select></div>
 {''.join(cards)}<footer><p>Abra o CIF no Mercury ou VESTA para inspecionar simetria e conectividade. A miniatura mostra somente uma projeção dos sítios da unidade assimétrica.</p></footer>
-<script>const search=document.getElementById('search'),status=document.getElementById('status');function filter(){{const q=search.value.toLocaleLowerCase();document.querySelectorAll('.compound').forEach(c=>{{let visible=0;const name=c.querySelector('h2').textContent.toLocaleLowerCase();c.querySelectorAll('.work').forEach(w=>{{const show=(!q||name.includes(q)||w.textContent.toLocaleLowerCase().includes(q))&&(!status.value||w.dataset.status===status.value);w.hidden=!show;if(show)visible++;}});c.hidden=!!(q||status.value)&&!visible&&!name.includes(q);}});}}search.addEventListener('input',filter);status.addEventListener('change',filter);</script></body></html>'''
+<script>const search=document.getElementById('search'),status=document.getElementById('status');function filter(){{const q=search.value.toLocaleLowerCase();document.querySelectorAll('.compound').forEach(c=>{{let visible=0;const name=c.querySelector('h2').textContent.toLocaleLowerCase();c.querySelectorAll('.work').forEach(w=>{{const show=(!q||name.includes(q)||w.textContent.toLocaleLowerCase().includes(q))&&(!status.value||w.dataset.status===status.value);w.hidden=!show;if(show)visible++;}});c.hidden=!visible&&(!!status.value||!!q&&!name.includes(q));}});}}search.addEventListener('input',filter);status.addEventListener('change',filter);</script></body></html>'''
 
 
 def export_report(store):
