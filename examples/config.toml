@@ -1,0 +1,24 @@
+# As opções desta seção podem ser sobrescritas pela linha de comando.
+[search]
+sources = ["cod", "hybrid3", "crossref", "openalex", "europepmc"]
+max_results = 100
+page_size = 50
+max_aliases = 6
+timeout = 30
+retries = 3
+interval = 0.5
+download_cifs = true
+
+# Famílias de busca adicionais se somam aos termos padrão.
+extra_terms = []
+
+# Chaves são lidas SOMENTE do ambiente: OPENALEX_API_KEY; email: PEROVSKITE_EMAIL.
+# Nunca salve tokens neste arquivo.
+# Para corrigir identidade, adicione aliases, CID confirmado e identity_reviewed.
+# Exemplo de sintaxe (não habilitado para evitar assumir a identidade da sua amostra):
+# [compounds."Nome na sua lista"]
+# aliases = ["sinônimo confirmado"]
+# family_aliases = ["forma protonada que deseja pesquisar"]
+# cid = 123
+# ambiguous = false
+# identity_reviewed = true

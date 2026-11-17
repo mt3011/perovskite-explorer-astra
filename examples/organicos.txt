@@ -1,0 +1,7 @@
+# Um composto por linha, em UTF-8
+4-Aminophenyl sulfone
+Phenazine
+Niacinamide
+Theobromine
+3-Aminobenzoic acid
+Nicotinic acid
